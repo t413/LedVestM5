@@ -22,6 +22,7 @@ const uint8_t gifLcdPxBorder = ((80 - gifLcdPxSize * 16) / 2);
 const uint8_t brightnesses[] = { 5, 8, 16, 32, 64, 128, 255 };
 uint8_t bright = 0;
 uint8_t fadeout_ = 0;
+bool autoplay_ = false;
 
 uint16_t c16(CRGB c) { return ((c.red & 0xF8) << 8) | ((c.green & 0xFC) << 3) | (c.blue >> 3); }
 
@@ -89,7 +90,6 @@ void bigMsg(String small, String big) {
 void loop() {
   File root = SPIFFS.open("/gifs");
   CRGB domGifColorL, domGifColorR; //persist between gifs
-  bool autoplay_ = false;
   while ((file = root.openNextFile())) { //file loop
     uint32_t lastChange = millis();
     String name(file.name());
