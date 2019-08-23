@@ -10,15 +10,17 @@
 #define CANVAS_WIDTH 16
 #define CANVAS_HEIGHT 16
 cLEDMatrix<CANVAS_WIDTH, CANVAS_HEIGHT, HORIZONTAL_ZIGZAG_MATRIX> matrix;
-CRGB frontLeds[FRONTLEDS_NUM];
+CRGB frontLedsL[2 * FRONTLEDS_NUM];
+CRGB *frontLedsR = &(frontLedsL[FRONTLEDS_NUM]);
 
 File file;
 
 GifDecoder<16, 16, 12> decoder;
-#define FRONT_TFT_W 2
-#define FRONT_TFT_H (M5.Lcd.height() / FRONTLEDS_NUM)
-#define GIF_PXW 4
-const uint8_t GIF_PXBDR = ((80 - GIF_PXW*16) / 2);
+const uint8_t frontLedsLcdPxW = 4;
+const uint8_t gifLcdPxSize = 4;
+const uint8_t gifLcdPxBorder = ((80 - gifLcdPxSize * 16) / 2);
+const uint8_t brightnesses[] = { 5, 8, 16, 32, 64, 128, 255 };
+uint8_t bright = 0;
 
 uint16_t c16(CRGB c) { return ((c.red & 0xF8) << 8) | ((c.green & 0xFC) << 3) | (c.blue >> 3); }
 
@@ -29,7 +31,7 @@ int fileReadBlockCallback(void * buffer, int numberOfBytes) { return file.read((
 void screenClearCallback(void) { FastLED.clear(); M5.Lcd.fillScreen(BLACK); }
 void updateScreenCallback(void) { FastLED.show(); }
 void drawPixelCallback(int16_t x, int16_t y, uint8_t red, uint8_t green, uint8_t blue) {
-  M5.Lcd.fillRect(GIF_PXBDR + x * GIF_PXW, y * GIF_PXW, GIF_PXW, GIF_PXW, c16(CRGB(red, green, blue)));
+  M5.Lcd.fillRect(gifLcdPxBorder + x * gifLcdPxSize, y * gifLcdPxSize, gifLcdPxSize, gifLcdPxSize, c16(CRGB(red, green, blue)));
   matrix.DrawPixel(CANVAS_WIDTH - 1 - x, y, CRGB(red, green, blue));
 }
 
@@ -53,56 +55,91 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Starting AnimatedGIFs Sketch");
 
-  FastLED.addLeds<WS2811, MATRIXPIN, GRB>(matrix[0], matrix.Size()).setCorrection(TypicalSMD5050);
-  FastLED.addLeds<WS2811, FRONT_PINA, GRB>(frontLeds, FRONTLEDS_NUM);
+  FastLED.addLeds<WS2811, MATRIXPIN, GRB>(matrix[0], matrix.Size()).setCorrection(0xC9E2FF);
+  FastLED.addLeds<WS2811, FRONT_PINA, GRB>(frontLedsL, FRONTLEDS_NUM);
+  FastLED.setMaxPowerInVoltsAndMilliamps(4, 500);
   Serial.printf("Neomatrix %d total LEDs, running on pin %d\n", CANVAS_WIDTH * CANVAS_HEIGHT, MATRIXPIN);
-  setBrightnesses(20);
+  setBrightnesses(brightnesses[bright = 2]);
 
   SPIFFS.begin();
 }
 
+void fuzzyWrite(CRGB c, float position, CRGB*leds, size_t num) {
+  uint16_t posfloor = (uint16_t)(position);
+  uint16_t remain = (uint16_t)((position - posfloor) * 256.0);
+  leds[ posfloor      % num] = c.lerp8(CRGB::Black, remain);
+  leds[(posfloor + 1) % num] = c.lerp8(CRGB::Black, 255 - remain);
+}
+
 void loop() {
   File root = SPIFFS.open("/gifs");
-  while ((file = root.openNextFile())) {
+  CRGB domGifColorL, domGifColorR; //persist between gifs
+  bool autoplay_ = false;
+  while ((file = root.openNextFile())) { //file loop
+    uint32_t lastChange = millis();
     String name(file.name());
     name.replace("/gifs/", "");
     Serial.println("decoding " + name);
     decoder.startDecoding();
 
-    while (!M5.BtnA.read()) {
+    while (true) { //frame render loop
       uint32_t now = millis();
+
+      // Button handling:
+      M5.update(); //updates buttons
+      if (M5.BtnA.pressedFor(1000)) { autoplay_ = !autoplay_; }
+      else if (M5.BtnA.wasReleased()) { break; } //next gif
+
+      if (M5.BtnB.pressedFor(1000)) { break; } //TODO: long press behavior
+      else if (M5.BtnB.wasReleased())
+        setBrightnesses(brightnesses[(bright = (bright + 1) % sizeof(brightnesses))]);
+
+      if (autoplay_ && (now - lastChange) > 10000)
+        break;
+
       decoder.decodeFrame();
-      M5.Lcd.setCursor(FRONT_TFT_W, 82, 1);
+      M5.Lcd.setCursor(frontLedsLcdPxW, gifLcdPxSize * CANVAS_HEIGHT + 2, 1);
+      M5.Lcd.setTextFont(1);
       M5.Lcd.setTextColor(WHITE, BLACK);
       M5.Lcd.println(name);
-      M5.Lcd.setTextColor(BLUE, BLACK);
-      M5.Lcd.printf("vbat:%.3fV\r\n", M5.Axp.GetVbatData() * 1.1 / 1000);
-      M5.Lcd.printf("btn:%d\r\n", M5.Axp.GetBtnPress());
+      M5.Lcd.setTextColor(c16(blend(domGifColorL,domGifColorR, 128)), BLACK);
+      if (autoplay_)
+        M5.Lcd.println(" -autoplay-");
+      M5.Lcd.setTextFont(2);
+      M5.Lcd.cursor_x += frontLedsLcdPxW;
+      M5.Lcd.printf("  %.3fV\r\n", M5.Axp.GetVbatData() * 1.1 / 1000);
       M5.Lcd.setTextColor(ORANGE, BLACK);
-      M5.Lcd.println((M5.Axp.GetIchargeData() > 0)? "charging" : "        ");
+      M5.Lcd.cursor_x += frontLedsLcdPxW;
+      if ((M5.Axp.GetIchargeData() > 0))
+        M5.Lcd.println(" charging");
       if (M5.Axp.GetWarningLeve()){
         M5.Lcd.setTextColor(RED, BLACK);
-        M5.Lcd.println("Warning: low battery");
+        M5.Lcd.println(" Warning: low battery");
         delay(1000);
         M5.Axp.SetSleep();
       }
-      M5.BtnB.read();
-      if (M5.BtnB.isPressed()) {
-        setBrightnesses(map(now - M5.BtnB.lastChange(), 0, 6000, 0, 255));
+
+      CRGB frameColorL, frameColorR;
+      for (uint16_t x=0; x < CANVAS_WIDTH; x++)
+        for (uint16_t y=0; y < CANVAS_HEIGHT; y++) //could use rgb2hsv_approximate
+          if (matrix(x,y).getLuma() > 64) //only use bright pixels
+            nblend(x < (CANVAS_WIDTH/2)? frameColorL : frameColorR, matrix(x,y), 128);
+      nblend(domGifColorL, frameColorL, 10);
+      nblend(domGifColorR, frameColorR, 10);
+
+      const uint8_t bttns = 4;
+      const uint8_t gap = (FRONTLEDS_NUM / bttns);
+      float pos = gap - ((uint8_t)(now >> 5) / 256.0) * gap;
+      for (uint16_t i=0; i < bttns; i++) { //number of 'buttons'
+        float p = i * gap + pos;
+        fuzzyWrite(domGifColorL, p, frontLedsL, FRONTLEDS_NUM);
+        fuzzyWrite(domGifColorR, p, frontLedsR, FRONTLEDS_NUM);
       }
-
-      CRGB domGifColor;
-      for (uint16_t i=0; i < matrix.Size(); i++)
-        if (rgb2hsv_approximate(matrix(i)).val > 50)
-          nblend(domGifColor, matrix(i), 128);
-
-      fadeToBlackBy(frontLeds, FRONTLEDS_NUM, 40);
-      int pos = random16(FRONTLEDS_NUM);
-      frontLeds[pos] += domGifColor; //TODO change saturation with this random (random8(64), 200, 255);
+      // Render vest-front leds to the TFT display:
       for (uint8_t i=0; i<FRONTLEDS_NUM; i++)
-        for (uint8_t p=0; p<GIF_PXBDR; p++) {
-          M5.Lcd.fillRect(0,    i * GIF_PXBDR, FRONT_TFT_W, FRONT_TFT_H, c16(frontLeds[i]) );
-          M5.Lcd.fillRect(80-FRONT_TFT_W, i * GIF_PXBDR, 2, FRONT_TFT_H, c16(frontLeds[i]) );
+        for (uint8_t p=0; p<gifLcdPxBorder; p++) {
+          M5.Lcd.fillRect(0,                  5 + i * gifLcdPxBorder, frontLedsLcdPxW, frontLedsLcdPxW, c16(frontLedsL[i]) );
+          M5.Lcd.fillRect(80-frontLedsLcdPxW, 5 + i * gifLcdPxBorder, frontLedsLcdPxW, frontLedsLcdPxW, c16(frontLedsR[i]) );
         }
     }
     M5.Lcd.fillScreen(BLACK);
