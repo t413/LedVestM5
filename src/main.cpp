@@ -1,12 +1,12 @@
 #include "GifDecoder.h"
 #include <FastLED.h>
-#include <LedMatrix.h>
+#include <LEDMatrix.h>
 #include <SPIFFS.h>
 #include <M5StickC.h>
 
 #define MATRIXPIN 26
 #define FRONT_PINA 0
-#define FRONTLEDS_NUM 21
+#define FRONTLEDS_NUM 22
 #define CANVAS_WIDTH 16
 #define CANVAS_HEIGHT 16
 cLEDMatrix<CANVAS_WIDTH, CANVAS_HEIGHT, HORIZONTAL_ZIGZAG_MATRIX> matrix;
@@ -59,7 +59,7 @@ void setup() {
   Serial.println("Starting AnimatedGIFs Sketch");
 
   FastLED.addLeds<WS2811, MATRIXPIN, GRB>(matrix[0], matrix.Size()).setCorrection(0xC9E2FF);
-  FastLED.addLeds<WS2811, FRONT_PINA, GRB>(frontLedsL, FRONTLEDS_NUM);
+  FastLED.addLeds<WS2811, FRONT_PINA, GRB>(frontLedsL, 2 * FRONTLEDS_NUM);
   FastLED.setMaxPowerInVoltsAndMilliamps(4, 500);
   Serial.printf("Neomatrix %d total LEDs, running on pin %d\n", CANVAS_WIDTH * CANVAS_HEIGHT, MATRIXPIN);
   setBrightnesses(brightnesses[bright = 2]);
