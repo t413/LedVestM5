@@ -1,9 +1,11 @@
 # LedVestM5
 M5StickC-powered GIF-playing LED vest with TFT Preview
 
-> [![preview](https://thumbs.gfycat.com/HugeCarefulAldabratortoise-size_restricted.gif)](https://gfycat.com/hugecarefulaldabratortoise)
-> [![preview](https://thumbs.gfycat.com/VelvetyMediocreIrishwaterspaniel-size_restricted.gif)](https://gfycat.com/VelvetyMediocreIrishwaterspaniel)
-> 
+> [<img alt="preview gif2" src="https://thumbs.gfycat.com/VelvetyMediocreIrishwaterspaniel-size_restricted.gif" width="200" />](https://gfycat.com/VelvetyMediocreIrishwaterspaniel)
+> <img alt="vest demo back" src="https://user-images.githubusercontent.com/326829/85434551-10eeba00-b53b-11ea-878d-2a63c2c5402f.jpg" width="200" />
+> <img alt="vest demo lcd" src="https://user-images.githubusercontent.com/326829/85434554-12b87d80-b53b-11ea-952d-a08c20d63c29.jpg" width="200" />
+> [<img alt="preview gif" src="https://thumbs.gfycat.com/HugeCarefulAldabratortoise-size_restricted.gif" height="270" />](https://gfycat.com/hugecarefulaldabratortoise)
+>
 > <sub>_(images clickable for much nicer video quality mpg versions)_</sub>
 
 Uses the insane $10 [M5StickC](https://m5stack.com/products/stick-c) to drive a **16x16 LED matrix** and two strings of LEDs. 
